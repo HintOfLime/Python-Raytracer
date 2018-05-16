@@ -2,11 +2,11 @@ import pygame
 import numpy as np
 import time
 
-WIDTH = 200.0
-HEIGHT = 200.0
-BACKGROUND = (45, 120, 170)
-MAX_RECURSIONS = 3
-DRAW_DISTANCE = 100000
+WIDTH = 800.0
+HEIGHT = 800.0
+BACKGROUND = (0, 0, 0)
+MAX_RECURSIONS = 5
+DRAW_DISTANCE = 10000
 
 
 class Vector3:
@@ -65,19 +65,19 @@ class Sphere:
 class Plane:
         def __init__ (self, x, y, z, xn, yn, zn, c, reflectivity):
                 self.center = Vector3(x, y, z)
-                self.normal = Vector3(xn, yn, zn)
+                self.normal = Vector3(-xn, -yn, -zn)
                 self.color = c
                 self.reflectivity = reflectivity
 
         def getColor (self, position):
-                if int(position.z/10) % 2 == 1:
-                        if int(position.x/10) % 2 == 1:
+                if int(position.z/30) % 2 == 1:
+                        if int(position.x/30) % 2 == 1:
                                 return (255, 255, 255)
                         else:
-                                return (16,16,16)
+                                return (64,64,64)
                 else:
-                        if int(position.x/10) % 2 == 1:
-                                return (16, 16, 16)
+                        if int(position.x/30) % 2 == 1:
+                                return (64, 64, 64)
                         else:
                                 return (255,255,255)
 
@@ -104,36 +104,62 @@ def get_first_intersect(ray):
                 A = dot(ray.direction, ray.direction)
                 dist = ray.origin - s.center
                 B = 2 * dot(ray.direction, dist)
-                C = dot(dist, dist) - s.radius**2
-                discr = B**2 - 4*C*A
+                C = dot(dist, dist) - (s.radius*s.radius)
+                discr = (B*B) - (4*A*C)
                 
-                if discr >= 0:
-                        t0 = (-B + np.sqrt(discr))/(2*A)
-                        t1 = (-B - np.sqrt(discr))/(2*A)
-                        
-                        d = min(t0,t1)
-                                
-                        if d < distance:
-                                closest = s
-                                distance = d
+                if discr < 0:
+                        continue
+
+                t0 = (-B - np.sqrt(discr))/(2*A)
+                t1 = (-B + np.sqrt(discr))/(2*A)
+
+                if t0 < 0 and t1 < 0:
+                        continue
+
+                if t0 < 0:
+                        d = t1
+                elif t1 < 0:
+                        d = t0
+                else:
+                        d = min(t0, t1)
+
+
+                #if d < 0:
+                #        continue
+                
+                               
+                if d < distance:
+                        closest = s
+                        distance = d
+                
                        
         for p in planes:
                 denom = dot(p.normal, ray.direction)
-                if denom > 0:
-                        v = p.center - ray.origin
-                        d = dot(v, p.normal) / denom
+                if denom > -0.000001 and denom < 0.000001:
+                        continue
+                
                         
-                        if d >= 0:        
-                                if d < distance:
-                                        closest = p
-                                        distance = d
+                v = p.center - ray.origin
+                d = dot(v, p.normal) / denom
+
+                if d < 0:
+                        continue
+
+                if d < distance:
+                        closest = p
+                        distance = d
 
         return closest, distance
 
 def reflect (incident, intersect, normal):
-        origin = intersect
-        direction = normalize(incident) - scale(normalize(normal), -2*dot(incident, normal))
+        incident = normalize(incident)
+        normal = normalize(normal)
+
+        origin = intersect + scale(normal, 0.0001)
+
+        direction = incident - scale(normal, 2*dot(incident, normal))
         return Ray(origin, direction)
+
 
 
 def trace (ray):
@@ -142,29 +168,36 @@ def trace (ray):
                 if o.__class__.__name__ == "Sphere":
                         scaled = scale(normalize(ray.direction), d)
                         intersect = ray.origin + scaled
+                        
                         norm = intersect - o.center
+                        norm = normalize(norm)
 
-                        temp = dot(norm, norm)
-                        temp = 1.0 / np.sqrt(temp)
-                        norm = scale(norm, temp)
+                        inside = False
+                        if dot(ray.direction, norm) > 0:
+                                scale(norm, -1)
+                                inside = True
 
-                        diffuse = (dot(normalize(light-intersect), norm))
+                        diffuse = dot(normalize(intersect-light), norm)
+                        specular = dot(normalize(intersect-light), normalize(reflect(ray.direction, intersect, norm).direction))
 
-                        specular = dot(normalize(light-intersect), reflect(ray.direction, intersect, norm).direction)
-
-                        shadowRay = Ray(intersect, light-intersect)
-                        a, b = get_first_intersect(shadowRay)
-                        #if a != 0:
-                                #diffuse = 0
-                                #specular = 0
-
-                        if diffuse < 0.1:
-                                diffuse = 0.1
+                        if diffuse < 0.2:
+                                diffuse = 0.2
                         elif diffuse > 1:
                                 diffuse = 1
+                        if specular < 0:
+                                specular = 0
+                        elif specular > 1:
+                                specular = 1
 
+                        shadowRay = Ray(intersect+scale(norm, 0.001), intersect - light)
+                        a, d = get_first_intersect(shadowRay)
+                        if a != 0:
+                                diffuse = 0.1
+                                specular = 0
 
-                        return (o.getColor()[0]*diffuse, o.getColor()[1]*diffuse, o.getColor()[2]*diffuse), reflect(ray.direction, intersect, norm), o.reflectivity
+                        lighting = (diffuse + specular)/2
+
+                        return (o.getColor()[0]*lighting, o.getColor()[1]*lighting, o.getColor()[2]*lighting), reflect(ray.direction, intersect, norm), o.reflectivity
 
                 if o.__class__.__name__ == "Plane":
                         scaled = scale(normalize(ray.direction), d)
@@ -172,75 +205,81 @@ def trace (ray):
 
                         norm = o.normal
 
-                        #diffuse = (dot(normalize(light-intersect), norm))
+                        if dot(ray.direction, norm) > 0:
+                                scale(norm, -1)
 
-                        #specular = dot(normalize(light-intersect), reflect(ray.direction, intersect, norm).direction)
+                        diffuse = (dot(normalize(light-intersect), norm))
+                        specular = dot(normalize(light-intersect), reflect(ray.direction, intersect, norm).direction)
 
-                        #shadowRay = Ray(intersect, light-intersect)
-                        #a, b = get_first_intersect(shadowRay)
-                        #if a != 0:
-                                #diffuse = 0
-                                #specular = 0
+                        if diffuse < 0.2:
+                                diffuse = 0.2
+                        elif diffuse > 1:
+                                diffuse = 1
+                        if specular < 0:
+                                specular = 0
+                        elif specular > 1:
+                                specular = 1
 
-                        #if diffuse < 0.1:
-                                #diffuse = 0.1
-                        #elif diffuse > 1:
-                                #diffuse = 1
+                        diffuse = 1
+                        specular = 1
 
+                        shadowRay = Ray(intersect+scale(norm, 0.1), intersect - light)
+                        a, d = get_first_intersect(shadowRay)
+                        if a != 0:
+                                diffuse = 0.4
+                                specular = 0
+
+                        lighting = (diffuse + specular)/2
 
                         #return (o.color[0]*diffuse, o.color[1]*diffuse, o.color[2]*diffuse), reflect(ray.direction, intersect, norm), o.reflectivity
-                        hitPoint = intersect - o.center
-                        return (o.getColor(hitPoint)[0], o.getColor(hitPoint)[1], o.getColor(hitPoint)[2]), reflect(ray.direction, intersect, norm), o.reflectivity
+                        hitPoint = intersect - o.center - Vector3(10000, 10000, 0)
+                        return (o.getColor(hitPoint)[0]*lighting, o.getColor(hitPoint)[1]*lighting, o.getColor(hitPoint)[2]*lighting), reflect(ray.direction, intersect, norm), o.reflectivity
 
         return BACKGROUND, 0, 0
 
 def calc_pixel (ray):
         r = 0
         out = (0,0,0)
+        color = [(0,0,0)] * (MAX_RECURSIONS+1)
+        reflectivity = [0] * (MAX_RECURSIONS+1)
 
         while r < MAX_RECURSIONS:
-
-                c, ray, reflectivity = trace(ray)
-                #reflectivity = 1
-                c = (c[0]/255.0, c[1]/255.0, c[2]/255.0)
-
-                #out = ( (out[0]*(1-reflectivity))+(c[0]*reflectivity),
-                #        (out[1]*(1-reflectivity))+(c[1]*reflectivity),
-                #        (out[2]*(1-reflectivity))+(c[2]*reflectivity))
-
-                out = ( (out[0]+c[0]),
-                        (out[1]+c[1]),
-                        (out[2]+c[2]))
-
-                r += 1
+                color[r], ray, reflectivity[r] = trace(ray)
                 if ray == 0:
                         break
+                r += 1
 
-        out = (out[0]*255/MAX_RECURSIONS, out[1]*255/MAX_RECURSIONS, out[2]*255/MAX_RECURSIONS)
+        i = r
+        while i >= 0:
+                out = ( (out[0]*reflectivity[i]) + (color[i][0]*(1-reflectivity[i])),
+                        (out[1]*reflectivity[i]) + (color[i][1]*(1-reflectivity[i])),
+                        (out[2]*reflectivity[i]) + (color[i][2]*(1-reflectivity[i]))
+                      )
+                i = i-1
 
-        if r == 1:
-                out = BACKGROUND
-
-        return out, r
+        return out, r+1
         
         
 
 pygame.init()
 screen = pygame.display.set_mode((int(WIDTH), int(HEIGHT)))
 
-spheres = [ Sphere(30, 30, 200, 50,(255,0,0,), 0.5),
-            Sphere(150, 30, 150, 50,(0,0,255), 0.5), 
-            Sphere(100, 125, 100, 50,(0,255,0), 0.5),
-            Sphere(100, 50, 250, 50,(128,128,128), 0.5)
+spheres = [ 
+            Sphere(100, 125, 100, 25,(0,0,255), 0.3),
+            Sphere(90, 70, 120, 30,(0,255,0), 0.3),
+            Sphere(180, 80, 200, 70, (255,255,255), 0.9),
+            Sphere(50, 110, 150, 40, (255,0,0), 0.3)
           ]
 
-planes =  [ Plane(100,150,0, 0,1,0, (255,255,255), 0.5)
+planes =  [ Plane(0,150,0, 0,1,0, (255,255,255), 0.5)
           ]
 
-light = Vector3(0, 0, 0)
+light = Vector3(0, 500, 500)
 done = False
 totalRays = 0
 i = 0
+
+#spheres.append(Sphere(light.x, light.y, light.z, 5, (255,255,255), 0))
 
 while not done:
         screenX = 0.0
