@@ -7,12 +7,12 @@ import multiprocessing as mp
 from vector import *
 from environment import *
 
-WIDTH = 400
-HEIGHT = 400
-SCALE = 2
+WIDTH = 800
+HEIGHT = 800
+SCALE = 1
 MAX_RECURSIONS = 3
 EXPORT_VIDEO = True
-RENDERERS = 4
+RENDERERS = 2
 
 def render(p, x1, y1, x2, y2, cameraPos, cameraRot, output):
         #print "Renderer " + str(p) + " started"
@@ -151,7 +151,7 @@ def trace (ray, reursion_depth):
 
                         diffuse = dot(normalize(light-intersect), norm)
                         specular = dot(normalize(light-intersect), normalize(reflect(ray.direction, intersect, norm).direction))
-                        ambient = 0.2
+                        ambient = 0.1
 
                         if diffuse < 0.0:
                                 diffuse = 0.0
@@ -177,9 +177,9 @@ def trace (ray, reursion_depth):
                                          (color[1]*(1-o.reflectivity)) + (reflection_color[1]*o.reflectivity),
                                          (color[2]*(1-o.reflectivity)) + (reflection_color[2]*o.reflectivity))
                         else:
-                                color = (color[0]*(1-o.reflectivity),
-                                         color[1]*(1-o.reflectivity),
-                                         color[2]*(1-o.reflectivity))
+                                color = (color[0]*(1.0-o.reflectivity),
+                                         color[1]*(1.0-o.reflectivity),
+                                         color[2]*(1.0-o.reflectivity))
 
                         color = (np.clip(color[0], 0, 255),
                                  np.clip(color[1], 0, 255),
@@ -197,7 +197,7 @@ def trace (ray, reursion_depth):
 
                         diffuse = (dot(normalize(light-intersect), norm))
                         specular = dot(normalize(light-intersect), reflect(ray.direction, intersect, norm).direction)
-                        ambient = 0.2
+                        ambient = 0.1
 
                         if diffuse < 0.0:
                                 diffuse = 0.0
@@ -219,9 +219,13 @@ def trace (ray, reursion_depth):
 
                         if o.reflectivity > 0.0 and reursion_depth < MAX_RECURSIONS:
                                 reflection_color = trace( reflect(ray.direction, intersect, norm), reursion_depth )
-                                color = ((color[0]*(1-o.reflectivity)) + (reflection_color[0]*o.reflectivity),
-                                         (color[1]*(1-o.reflectivity)) + (reflection_color[1]*o.reflectivity),
-                                         (color[2]*(1-o.reflectivity)) + (reflection_color[2]*o.reflectivity))
+                                color = ((color[0]*(1.0-o.reflectivity)) + (reflection_color[0]*o.reflectivity),
+                                         (color[1]*(1.0-o.reflectivity)) + (reflection_color[1]*o.reflectivity),
+                                         (color[2]*(1.0-o.reflectivity)) + (reflection_color[2]*o.reflectivity))
+                        else:
+                                color = (color[0]*(1.0-o.reflectivity),
+                                         color[1]*(1.0-o.reflectivity),
+                                         color[2]*(1.0-o.reflectivity))
 
                         color = (np.clip(color[0], 0, 255),
                                  np.clip(color[1], 0, 255),
@@ -256,35 +260,53 @@ if __name__ == '__main__':
 
                 start_time = time.time()
 
-                for event in pygame.event.get():
-                        if event.type == pygame.QUIT:
-                                done = True
-                
                 if done:
                         break
 
-                p = 0
-                while p < RENDERERS:
-                       x1 = p*(WIDTH/RENDERERS)
-                       y1 = 0
-                       processes[p] = mp.Process(target=render, args=(p, x1, y1, x1+(WIDTH/RENDERERS), HEIGHT, cameraPos, cameraRot, output,))
-                       processes[p].start()
-                       p += 1
+                if RENDERERS > 1:
+                        p = 0
+                        while p < RENDERERS:
+                                x1 = p*(WIDTH/RENDERERS)
+                                y1 = 0
+                                processes[p] = mp.Process(target=render, args=(p, x1, y1, x1+(WIDTH/RENDERERS), HEIGHT, cameraPos, cameraRot, output,))
+                                processes[p].start()
+                                p += 1
 
-                p = 0
-                while p < RENDERERS:
-                        processes[p].join(timeout=0.0)
-                        result = output.get()
+                        p = 0
+                        while p < RENDERERS:
+                                for event in pygame.event.get():
+                                        if event.type == pygame.QUIT:
+                                                done = True
+                                if done:
+                                                break
+                                processes[p].join(timeout=0.0)
+                                result = output.get()
 
-                        for y in range(HEIGHT):
-                                for x in range(WIDTH/RENDERERS):
-                                        screenX = x+(result[0]*(WIDTH/RENDERERS))
-                                        for y2 in range(SCALE):
-                                                for x2 in range(SCALE):
-                                                        screen.set_at((int((screenX*SCALE)+x2), int((y*SCALE)+y2)), result[1][y][x])
+                                for y in range(HEIGHT):
+                                        for x in range(WIDTH/RENDERERS):
+                                                screenX = x+(result[0]*(WIDTH/RENDERERS))
+                                                for y2 in range(SCALE):
+                                                        for x2 in range(SCALE):
+                                                                screen.set_at((int((screenX*SCALE)+x2), int((y*SCALE)+y2)), result[1][y][x])
                                        
-                        pygame.display.flip()
-                        p += 1
+                                pygame.display.flip()
+                                p += 1
+                else:
+                        for y in range(HEIGHT):
+                                for event in pygame.event.get():
+                                        if event.type == pygame.QUIT:
+                                                done = True
+                                if done:
+                                                break
+
+                                for x in range(WIDTH):
+                                        direction = normalize(rotate(normalize( Vector3(((float(x) / float(WIDTH))-0.5)*200.0*0.012, ((float(y) / float(HEIGHT))-0.5)*200.0*.012, 1.0)), cameraRot))
+                                        r = Ray(cameraPos, direction)
+                                        c, rays = calc_pixel(r)
+                                        for y2 in range(SCALE):
+                                                        for x2 in range(SCALE):
+                                                                screen.set_at((int((x*SCALE)+x2), int((y*SCALE)+y2)), c)
+                                        pygame.display.flip()
 
                 time_elapsed = time.time() - start_time
                 fps = 1.0 / time_elapsed
@@ -293,6 +315,14 @@ if __name__ == '__main__':
 
                 if EXPORT_VIDEO == True:
                         pygame.image.save(screen, "screenshots/screenshot_" + str("%06d" % int(i)) + ".bmp")
+                else:
+                        while True:
+                                for event in pygame.event.get():
+                                        if event.type == pygame.QUIT:
+                                                done = True
+                                if done:
+                                        break
+
                 i += 1
                 if i > FRAMES-1:
                         break

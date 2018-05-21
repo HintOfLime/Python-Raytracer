@@ -14,10 +14,9 @@ class Sphere:
 
         def getCoord (self, intersect):
                 hitVec = intersect - self.center
-                x = (1.0 + np.arctan2(hitVec.z, hitVec.x)) / (np.pi*2.0)
+                x = (np.arctan2(hitVec.z, hitVec.x) / (2*np.pi)) + 0.5
                 y = np.arccos(hitVec.y / self.radius) / np.pi
-                return (x*250.0, y*250.0)
-
+                return (x, y)
 class Plane:
         def __init__ (self, center, normal, colorClass, kd, ks, reflectivity):
                 self.center = center
@@ -36,7 +35,7 @@ class Plane:
                         x_axis = cross(self.normal, Vector3(0.0,0.0,1.0))
                 y_axis = cross(self.normal, x_axis)
 
-                hitCoord = ( dot(intersect-self.center, x_axis)+1000000,
-                             dot(intersect-self.center, y_axis)+1000000 )
+                hitCoord = ( dot(intersect-self.center, x_axis)/30.0+1000000,
+                             dot(intersect-self.center, y_axis)/30.0+1000000 )
 
                 return hitCoord
