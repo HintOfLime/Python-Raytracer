@@ -9,13 +9,16 @@ class Sphere:
                 self.ks = ks
                 self.reflectivity = reflectivity
 
+        def getNormal(self, intersect):
+                return normalize(intersect - self.center)
+
         def getColor (self, position):
                 return self.colorClass.getColor(position)
 
         def getCoord (self, intersect):
                 hitVec = intersect - self.center
                 x = (np.arctan2(hitVec.z, hitVec.x) / (2*np.pi)) + 0.5
-                y = np.arccos(hitVec.y / self.radius) / np.pi
+                y = 1.0 - (np.arccos(hitVec.y / self.radius) / np.pi)
                 return (x, y)
 class Plane:
         def __init__ (self, center, normal, colorClass, kd, ks, reflectivity):
@@ -25,6 +28,9 @@ class Plane:
                 self.kd = kd
                 self.ks = ks
                 self.reflectivity = reflectivity
+
+        def getNormal(self, intersect):
+                return normalize(self.normal)
 
         def getColor (self, position):
                 return self.colorClass.getColor(position)

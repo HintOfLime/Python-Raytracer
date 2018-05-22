@@ -22,7 +22,7 @@ def render(p, x1, y1, x2, y2, cameraPos, cameraRot, output):
                         direction = normalize(rotate(normalize( Vector3(((float(x+x1) / float(WIDTH))-0.5)*200.0*0.012, ((float(y+y1) / float(HEIGHT))-0.5)*200.0*.012, 1.0)), cameraRot))
                         r = Ray(cameraPos, direction)
                         c, rays = calc_pixel(r)
-                        out[y][x] = c
+                        out[y][x] = gamma_decode(c)
 
         #print "Renderer " + str(p) + " done"
         output.put((p, out))
@@ -31,28 +31,6 @@ class Ray:
         def __init__ (self, origin, direction):
                 self.origin = origin
                 self.direction = direction
-
-def normalize (a):
-                d = magnitude(a)
-                if d == 0.0:
-                        return Vector3(0,0,0)
-                else:
-                        return Vector3(a.x/d, a.y/d, a.z/d)
-
-def dot (a, b):
-        return (a.x*b.x) + (a.y*b.y) + (a.z*b.z)
-
-def cross (a,b):
-        return Vector3( (a.y*b.z) - (a.z*b.y),
-                        (a.z*b.x) - (a.x*b.z),
-                        (a.x*b.y) - (a.y*b.x))
-
-def scale (a, k):
-        b = Vector3(a.x * k, a.y * k, a.z * k)
-        return b
-
-def magnitude (a):
-        return np.sqrt((a.x*a.x) + (a.y*a.y) + (a.z*a.z))
 
 def rotate(a, theta) :
         matrix_x = np.matrix([[1,                  0,                   0               ],
@@ -76,7 +54,7 @@ def rotate(a, theta) :
 
 def get_first_intersect(ray):
         distance = DRAW_DISTANCE
-        closest = 0.0
+        closest = 0
         for s in spheres:
                 A = dot(ray.direction, ray.direction)
                 dist = ray.origin - s.center
@@ -137,101 +115,58 @@ def reflect (incident, intersect, normal):
 def trace (ray, reursion_depth):
         o, d = get_first_intersect(ray)        
         if type(o) != int:
-                if o.__class__.__name__ == "Sphere":
-                        reursion_depth += 1
+                reursion_depth += 1
 
-                        scaled = scale(normalize(ray.direction), d)
-                        intersect = ray.origin + scaled
-                        
-                        norm = intersect - o.center
-                        norm = normalize(norm)
+                scaled = scale(normalize(ray.direction), d)
+                intersect = ray.origin + scaled
+                
+                norm = o.getNormal(intersect)
 
-                        if dot(ray.direction, norm) > 0.0:
-                                scale(norm, -1.0)
+                if dot(ray.direction, norm) > 0.0:
+                        scale(norm, -1.0)
 
-                        diffuse = dot(normalize(light-intersect), norm)
-                        specular = dot(normalize(light-intersect), normalize(reflect(ray.direction, intersect, norm).direction))
-                        ambient = 0.1
+                cd, cs, b = o.getColor(o.getCoord(intersect))
 
-                        if diffuse < 0.0:
-                                diffuse = 0.0
-                        if specular < 0.0:
-                                specular = 0.0
+                tangent = normalize(cross(Vector3(0.0,1.0,0.0), norm))
+                bitangent  = normalize(cross(norm, tangent))
 
-                        shadowRay = Ray(intersect+scale(norm, 0.001), normalize(light-intersect))
-                        a, d = get_first_intersect(shadowRay)
-                        if d < magnitude(light-intersect):
-                                diffuse = 0.0
-                                specular = 0.0
-                        specular = specular ** 4
+                norm = normalize(norm + scale(tangent, (b[0]/-255.0)+0.5) + scale(bitangent , (b[1]/-255.0)+0.5))
 
-                        cd, cs = o.getColor(o.getCoord(intersect))
+                diffuse = dot(normalize(light-intersect), norm)
+                specular = dot(normalize(light-intersect), normalize(reflect(ray.direction, intersect, norm).direction))
+                ambient = 0.1
 
-                        color = ((cd[0]*diffuse*o.kd)+(cs[0]*specular*o.ks)+(cd[0]*ambient),
-                                 (cd[1]*diffuse*o.kd)+(cs[1]*specular*o.ks)+(cd[1]*ambient),
-                                 (cd[2]*diffuse*o.kd)+(cs[2]*specular*o.ks)+(cd[2]*ambient))
+                if diffuse < 0.0:
+                        diffuse = 0.0
+                if specular < 0.0:
+                        specular = 0.0
 
-                        if o.reflectivity > 0.0 and reursion_depth < MAX_RECURSIONS:
-                                reflection_color = trace( reflect(ray.direction, intersect, norm), reursion_depth )
-                                color = ((color[0]*(1-o.reflectivity)) + (reflection_color[0]*o.reflectivity),
-                                         (color[1]*(1-o.reflectivity)) + (reflection_color[1]*o.reflectivity),
-                                         (color[2]*(1-o.reflectivity)) + (reflection_color[2]*o.reflectivity))
-                        else:
-                                color = (color[0]*(1.0-o.reflectivity),
-                                         color[1]*(1.0-o.reflectivity),
-                                         color[2]*(1.0-o.reflectivity))
+                shadowRay = Ray(intersect+scale(norm, 0.001), normalize(light-intersect))
+                a, d = get_first_intersect(shadowRay)
+                if d < magnitude(light-intersect):
+                        diffuse = 0.0
+                        specular = 0.0
+                specular = specular ** 4
 
-                        color = (np.clip(color[0], 0, 255),
-                                 np.clip(color[1], 0, 255),
-                                 np.clip(color[2], 0, 255))
+                color = ((cd[0]*diffuse*o.kd)+(cs[0]*specular*o.ks)+(cd[0]*ambient),
+                         (cd[1]*diffuse*o.kd)+(cs[1]*specular*o.ks)+(cd[1]*ambient),
+                         (cd[2]*diffuse*o.kd)+(cs[2]*specular*o.ks)+(cd[2]*ambient))
 
-                        return color
+                if o.reflectivity > 0.0 and reursion_depth < MAX_RECURSIONS:
+                        reflection_color = trace( reflect(ray.direction, intersect, norm), reursion_depth )
+                        color = ((color[0]*(1-o.reflectivity)) + (reflection_color[0]*o.reflectivity),
+                                        (color[1]*(1-o.reflectivity)) + (reflection_color[1]*o.reflectivity),
+                                        (color[2]*(1-o.reflectivity)) + (reflection_color[2]*o.reflectivity))
+                else:
+                        color = (color[0]*(1.0-o.reflectivity),
+                                        color[1]*(1.0-o.reflectivity),
+                                        color[2]*(1.0-o.reflectivity))
 
-                if o.__class__.__name__ == "Plane":
-                        reursion_depth += 1
+                color = (np.clip(color[0], 0, 255),
+                                np.clip(color[1], 0, 255),
+                                np.clip(color[2], 0, 255))
 
-                        scaled = scale(normalize(ray.direction), d)
-                        intersect = ray.origin + scaled
-                        
-                        norm = normalize(o.normal)
-
-                        diffuse = (dot(normalize(light-intersect), norm))
-                        specular = dot(normalize(light-intersect), reflect(ray.direction, intersect, norm).direction)
-                        ambient = 0.1
-
-                        if diffuse < 0.0:
-                                diffuse = 0.0
-                        if specular < 0.0:
-                                specular = 0.0
-                        specular = specular ** 4
-
-                        shadowRay = Ray(intersect+scale(norm, 0.001), normalize(light-intersect))
-                        a, d = get_first_intersect(shadowRay)
-                        if d < magnitude(light-intersect):
-                                diffuse = 0.0
-                                specular = 0.0
-                        
-                        cd, cs = o.getColor(o.getCoord(intersect))
-
-                        color = ((cd[0]*diffuse*o.kd)+(cs[0]*specular*o.ks)+(cd[0]*ambient),
-                                 (cd[1]*diffuse*o.kd)+(cs[1]*specular*o.ks)+(cd[1]*ambient),
-                                 (cd[2]*diffuse*o.kd)+(cs[2]*specular*o.ks)+(cd[2]*ambient))
-
-                        if o.reflectivity > 0.0 and reursion_depth < MAX_RECURSIONS:
-                                reflection_color = trace( reflect(ray.direction, intersect, norm), reursion_depth )
-                                color = ((color[0]*(1.0-o.reflectivity)) + (reflection_color[0]*o.reflectivity),
-                                         (color[1]*(1.0-o.reflectivity)) + (reflection_color[1]*o.reflectivity),
-                                         (color[2]*(1.0-o.reflectivity)) + (reflection_color[2]*o.reflectivity))
-                        else:
-                                color = (color[0]*(1.0-o.reflectivity),
-                                         color[1]*(1.0-o.reflectivity),
-                                         color[2]*(1.0-o.reflectivity))
-
-                        color = (np.clip(color[0], 0, 255),
-                                 np.clip(color[1], 0, 255),
-                                 np.clip(color[2], 0, 255))
-
-                        return color
+                return color
 
         return (0, 0, 0)
 
@@ -305,8 +240,8 @@ if __name__ == '__main__':
                                         c, rays = calc_pixel(r)
                                         for y2 in range(SCALE):
                                                         for x2 in range(SCALE):
-                                                                screen.set_at((int((x*SCALE)+x2), int((y*SCALE)+y2)), c)
-                                        pygame.display.flip()
+                                                                screen.set_at((int((x*SCALE)+x2), int((y*SCALE)+y2)), gamma_decode(c))
+                                pygame.display.flip()
 
                 time_elapsed = time.time() - start_time
                 fps = 1.0 / time_elapsed
