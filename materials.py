@@ -2,7 +2,7 @@ from PIL import Image
 import numpy as np
 import math
 
-GAMMA = 1.0
+GAMMA = 1.2
 
 def gamma_encode (linear):
         return (pow(linear[0], 1.0/GAMMA), pow(linear[1], 1.0/GAMMA), pow(linear[2], 1.0/GAMMA))
@@ -26,17 +26,18 @@ class Solid:
                 return gamma_encode(self.cd), self.cs, (128,128,128)
 
 class Grid:
-        def __init__ (self):
+        def __init__ (self, tiling):
+                self.tiling = tiling
                 return
 
         def getColor(self, texCoord):
-                if int(round(texCoord[1], 1)) % 2 == 1:
-                        if int(round(texCoord[0], 1)) % 2 == 1:
+                if int(texCoord[1]*self.tiling) % 2 == 1:
+                        if int(texCoord[0]*self.tiling) % 2 == 1:
                                 return gamma_encode((255,255,255)), (255,255,255), (128,128,128)
                         else:
                                 return gamma_encode((0,0,0)), (255,255,255), (128,128,128)
                 else:
-                        if int(round(texCoord[0], 1)) % 2 == 1:
+                        if int(texCoord[0]*self.tiling) % 2 == 1:
                                 return gamma_encode((0,0,0)), (255,255,255), (128,128,128)
                         else:
                                 return gamma_encode((255,255,255)), (255,255,255), (128,128,128)
@@ -57,5 +58,5 @@ class TextureWrapper:
 
         def getColor(self, texCoord):
                 width, height = self.texture.size
-                r, g, b = self.texture.getpixel((texCoord[0]*(width-1), texCoord[1]*(height-1)))
+                r, g, b = self.texture.getpixel((texCoord[0]*(width-1.0), texCoord[1]*(height-1.0)))
                 return (r,g,b)

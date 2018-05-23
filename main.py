@@ -7,12 +7,12 @@ import multiprocessing as mp
 from vector import *
 from environment import *
 
-WIDTH = 800
-HEIGHT = 800
+WIDTH = 900
+HEIGHT = 900
 SCALE = 1
 MAX_RECURSIONS = 3
 EXPORT_VIDEO = True
-RENDERERS = 2
+RENDERERS = 3
 
 def render(p, x1, y1, x2, y2, cameraPos, cameraRot, output):
         #print "Renderer " + str(p) + " started"
@@ -34,16 +34,16 @@ class Ray:
 
 def rotate(a, theta) :
         matrix_x = np.matrix([[1,                  0,                   0               ],
-                             [0,                  np.cos(theta.x),    -np.sin(theta.x) ],
-                             [0,                  np.sin(theta.x),     np.cos(theta.x) ]])
+                              [0,                  np.cos(theta.x),    -np.sin(theta.x) ],
+                              [0,                  np.sin(theta.x),     np.cos(theta.x) ]])
 
         matrix_y = np.matrix([[np.cos(theta.y),    0,                   np.sin(theta.y) ],
-                             [0,                  1,                   0               ],
-                             [-np.sin(theta.y),   0,                   np.cos(theta.y) ]])
+                              [0,                  1,                   0               ],
+                              [-np.sin(theta.y),   0,                   np.cos(theta.y) ]])
 
         matrix_z = np.matrix([[np.cos(theta.z),    -np.sin(theta.z),    0               ],
-                             [np.sin(theta.z),    np.cos(theta.z),     0               ],
-                             [0,                  0,                   1               ]])
+                              [np.sin(theta.z),    np.cos(theta.z),     0               ],
+                              [0,                  0,                   1               ]])
         a = normalize(a)
         matrix = np.dot(matrix_z, np.dot(matrix_x, matrix_y))
         a = np.matrix([a.x, a.y, a.z])
@@ -55,6 +55,29 @@ def rotate(a, theta) :
 def get_first_intersect(ray):
         distance = DRAW_DISTANCE
         closest = 0
+                       
+        for p in planes:
+                denom = dot(p.normal, ray.direction)
+                if denom > -0.000001 and denom < 0.000001:
+                        continue
+                  
+                v = p.center - ray.origin
+                d = dot(v, p.normal) / denom
+
+                if d < 0.0:
+                        continue
+
+                if d < distance:
+                        scaled = scale(normalize(ray.direction), d)
+                        intersect = ray.origin + scaled
+                        coord = p.getSurfaceCoord(intersect)
+                        if coord[0] > 1.0 or coord[0] < 0.0:
+                                continue
+                        if coord[1] > 1.0 or coord[1] < 0.0:
+                                continue
+                        closest = p
+                        distance = d
+
         for s in spheres:
                 A = dot(ray.direction, ray.direction)
                 dist = ray.origin - s.center
@@ -80,23 +103,6 @@ def get_first_intersect(ray):
                                
                 if d < distance:
                         closest = s
-                        distance = d
-                
-                       
-        for p in planes:
-                denom = dot(p.normal, ray.direction)
-                if denom > -0.000001 and denom < 0.000001:
-                        continue
-                
-                        
-                v = p.center - ray.origin
-                d = dot(v, p.normal) / denom
-
-                if d < 0.0:
-                        continue
-
-                if d < distance:
-                        closest = p
                         distance = d
 
         return closest, distance
@@ -125,12 +131,11 @@ def trace (ray, reursion_depth):
                 if dot(ray.direction, norm) > 0.0:
                         scale(norm, -1.0)
 
-                cd, cs, b = o.getColor(o.getCoord(intersect))
+                cd, cs, b = o.getColor(o.getSurfaceCoord(intersect))
 
-                tangent = normalize(cross(Vector3(0.0,1.0,0.0), norm))
-                bitangent  = normalize(cross(norm, tangent))
+                tangent, bitangent = o.getTangentAxis(intersect)
 
-                norm = normalize(norm + scale(tangent, (b[0]/-255.0)+0.5) + scale(bitangent , (b[1]/-255.0)+0.5))
+                norm = normalize(norm + scale(tangent, ((b[1]/255.0)-0.5)*1.0) + scale(bitangent , ((b[0]/255.0)-0.5)*1.0))
 
                 diffuse = dot(normalize(light-intersect), norm)
                 specular = dot(normalize(light-intersect), normalize(reflect(ray.direction, intersect, norm).direction))
@@ -140,13 +145,18 @@ def trace (ray, reursion_depth):
                         diffuse = 0.0
                 if specular < 0.0:
                         specular = 0.0
-
-                shadowRay = Ray(intersect+scale(norm, 0.001), normalize(light-intersect))
-                a, d = get_first_intersect(shadowRay)
-                if d < magnitude(light-intersect):
-                        diffuse = 0.0
-                        specular = 0.0
                 specular = specular ** 4
+
+                shadowIntensity = 0.0
+                for y in range(3):
+                        for x in range(3):
+                                shadowRayOrigin = intersect + scale(tangent, (x-1.5)*1.0) + scale(bitangent , (y-1.5)*1.0)
+                                shadowRay = Ray(shadowRayOrigin+scale(norm, 0.001), normalize(light-intersect))
+                                a, d = get_first_intersect(shadowRay)
+                                if d < magnitude(light-intersect):
+                                        shadowIntensity += 1.0/9.0
+                diffuse = (1.0-shadowIntensity) * diffuse
+                specular = (1.0-shadowIntensity) * specular
 
                 color = ((cd[0]*diffuse*o.kd)+(cs[0]*specular*o.ks)+(cd[0]*ambient),
                          (cd[1]*diffuse*o.kd)+(cs[1]*specular*o.ks)+(cd[1]*ambient),
@@ -250,13 +260,6 @@ if __name__ == '__main__':
 
                 if EXPORT_VIDEO == True:
                         pygame.image.save(screen, "screenshots/screenshot_" + str("%06d" % int(i)) + ".bmp")
-                else:
-                        while True:
-                                for event in pygame.event.get():
-                                        if event.type == pygame.QUIT:
-                                                done = True
-                                if done:
-                                        break
 
                 i += 1
                 if i > FRAMES-1:
