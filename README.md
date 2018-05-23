@@ -5,3 +5,4 @@ A minimal raytracer with recursive reflections, textures and Phong lighting impl
 ![Alt text](https://github.com/KillerToxic50/Python-Raytracer/blob/master/screenshot.PNG?raw=true)
 ![Alt text](https://github.com/KillerToxic50/Python-Raytracer/blob/master/screenshot_2.PNG?raw=true)
 ![Alt text](https://github.com/KillerToxic50/Python-Raytracer/blob/master/screenshot_3.PNG?raw=true)
+![Alt text](https://github.com/KillerToxic50/Python-Raytracer/blob/master/screenshot_4.PNG?raw=true)
