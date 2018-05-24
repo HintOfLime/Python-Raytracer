@@ -20,7 +20,6 @@ class Solid:
         def __init__ (self, cd, cs):
                 self.cd = cd
                 self.cs = cs
-                return
         
         def getColor(self, position):
                 return gamma_encode(self.cd), self.cs, (128,128,128)
@@ -28,7 +27,6 @@ class Solid:
 class Grid:
         def __init__ (self, tiling):
                 self.tiling = tiling
-                return
 
         def getColor(self, texCoord):
                 if int(texCoord[1]*self.tiling) % 2 == 1:
@@ -46,7 +44,6 @@ class Texture:
         def __init__ (self, texture, bumpmap):
                 self.texture = TextureWrapper(texture)
                 self.bumpmap = TextureWrapper(bumpmap)
-                return
 
         def getColor(self, texCoord):
                 return gamma_encode( self.texture.getColor(texCoord) ), (255,255,255), self.bumpmap.getColor(texCoord)
