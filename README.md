@@ -1,5 +1,5 @@
 # Python-Raytracer
-A minimal raytracer with recursive reflections, textures and Phong lighting implemented in python.
+A minimal raytracer with recursive reflections, textures, area lights, softshadows and Phong lighting implemented in python.
 
 # Example scenes:
 ![Alt text](https://github.com/KillerToxic50/Python-Raytracer/blob/master/screenshot.PNG?raw=true)
